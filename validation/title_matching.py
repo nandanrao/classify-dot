@@ -14,20 +14,23 @@ def exact_matcher(lookup, df):
     return d[~d.code.isna()]
 
 @curry
-def punct_lookup(lookup, t):
+def punct_lookup(cache, lookup, t):
+    cached = cache.get(t)
+    if cached:
+        return cached
     z = zip(lookup.code, lookup.title)
     grams = [s.strip() for s in re.split(punctuation, t)]
     options = [(code, title) for code,title in z if title in grams]
     if len(options) > 0:
         options = sorted(options, key = lambda t: -len(t[1]))
-    return options[0] if options else (None,None)
+    result = options[0] if options else (None,None)
+    cache.set(t, result)
+    return result
 
 @curry
 def title_matcher(lookup, match_fn, df):
-    pool = Pool()
-    df['code'], df['assigned_title'] = zip(*pool.map(match_fn, df.title))
-    pool.close()
-    pool.join()
+    with Pool() as pool:
+        df['code'], df['assigned_title'] = zip(*pool.map(match_fn, df.title, 10000))
     return df[~df.code.isna()]
 
 @curry
