@@ -1,0 +1,1 @@
+docker run -it --rm -v $PWD:/tmp/mount mongo /usr/bin/mongoexport --host Bubbles-shard-0/mongodb://bubbles-shard-00-00-t7bij.mongodb.net:27017,bubbles-shard-00-01-t7bij.mongodb.net:27017,bubbles-shard-00-02-t7bij.mongodb.net:27017 --ssl --authenticationDatabase admin --db githubresults --collection dblp_returns --username healthworkers -o /tmp/mount/${1}

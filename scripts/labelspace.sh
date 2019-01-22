@@ -1,0 +1,1 @@
+docker run -d -v $PWD:/starspace/mount --name docspace nandanrao/starspace Starspace/starspace train -trainFile mount/${1} -model mount/${2} -dim 100 -ngrams 1 -minCount 300 -trainMode 0 -negSearchLimit 100 -fileFormat fastText -thread 32 -epoch 10 -saveEveryEpoch 1

@@ -1,0 +1,1 @@
+docker run -d -v $PWD:/starspace/mount --name sentencespace nandanrao/starspace Starspace/starspace train -trainFile mount/${1} -model mount/${2} -dim 200 -ngrams 1 -minCount 20 -trainMode 3 -fileFormat labelDoc -thread 32 -epoch 7 -saveEveryEpoch 1
