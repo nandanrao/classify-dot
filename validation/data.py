@@ -41,7 +41,7 @@ def indeed_test_data(texts, lim, soc_n):
     indeed = get_indeed_texts(texts, nrows=lim)
     matcher = make_matcher()
     matches = matcher(indeed.reset_index()).set_index('index')
-    return matches.content, get_soc_n(matches.code, soc_n), matches.id
+    return matches.content, get_soc_n(matches.code, soc_n), matches.index
 
 def dot_train_data(soc_n):
     """Combine DOT Dictionary and Tasks descriptions for training set"""
