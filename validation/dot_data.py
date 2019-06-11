@@ -16,7 +16,7 @@ def get_desc_lookup(path, soc_n):
     desc_key = desc_lookup[soc_n]
     return (pd
             .read_stata(path)
-            .drop_duplicates([key, 'dot_code9'])[[key, desc_key, 'dot_code9']]
+            .drop_duplicates([key, 'dot_code9'])[[key, desc_key, 'dot_code9', 'occ1990dd']]
             .rename(columns = {key: 'soc'})
             .pipe(lambda df: df.assign(soc = df.soc.astype(int))))
 

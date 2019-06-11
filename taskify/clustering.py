@@ -73,7 +73,7 @@ def make_regression_data(occ_xwalk, socd, wages_per_occ, clusters):
     xx = occ_xwalk.merge(socd.assign(cluster = clusters.astype(int)),
                          how='inner',
                          on='soc')
-    xx = xx[xx.cluster != 1]
+    xx = xx[xx.cluster != -1]
     v = vectorize_tasks(xx, xx.cluster.values, 'occ1990dd')
     d = wages_per_occ.merge(v, how = 'inner', on='occ1990dd')
     X,y = d.iloc[:,2:], d.ln_hrwage_sic_purge
@@ -129,8 +129,7 @@ def train_and_score(X, y, occ_codes, lookup):
     lasso.fit(X, y)
     return score_model(lasso.alpha_, X, y, occ_codes, lookup)
 
-def score_by_cluster_size(socd, vecs, occ_xwalk, wages_per_occ, clusterer, **kwargs):
-    clusters = clusterer(vecs, **kwargs)
+def _score_by_cluster_size(socd, vecs, occ_xwalk, wages_per_occ, clusters):
     X, y, occ_codes = make_regression_data(occ_xwalk, socd, wages_per_occ, clusters)
     occd = occ_xwalk.merge(socd.assign(cluster = clusters.astype(int)),
                            how='inner',
@@ -138,3 +137,7 @@ def score_by_cluster_size(socd, vecs, occ_xwalk, wages_per_occ, clusterer, **kwa
     lookup = make_lookup(socd, clusters, vecs)
 
     return train_and_score(X, y, occ_codes, lookup)
+
+def score_by_cluster_size(socd, vecs, occ_xwalk, wages_per_occ, clusterer, **kwargs):
+    clusters = clusterer(vecs, **kwargs)
+    return _score_by_cluster_size(socd, vecs, occ_xwalk, wages_per_occ, clusters)
