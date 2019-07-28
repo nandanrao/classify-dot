@@ -13,10 +13,11 @@ def get_indeed_texts(path, **kwargs):
 def get_soc_n(socs, N):
     return socs.str.split('-').map(lambda l: ''.join(l)[:N]).astype(int)
 
-def make_matcher():
+
+def get_title_lookup(path='crosswalks'):
     """Returns function that matches titles to SOC code"""
-    lookup = pd.read_csv('crosswalks/soc-title-lookup.csv')
-    xwalk = (pd.read_excel('crosswalks/soc_2000_to_2010_crosswalk.xls',
+    lookup = pd.read_csv(f'{path}/soc-title-lookup.csv')
+    xwalk = (pd.read_excel(f'{path}/soc_2000_to_2010_crosswalk.xls',
                           skiprows=6)
              .drop(0))
 
@@ -28,7 +29,10 @@ def make_matcher():
               [['title', '2000 SOC code']]
               .rename(columns={'2000 SOC code': 'code'})
               .dropna(subset=['code']))
+    return lookup
 
+def make_matcher():
+    lookup = get_title_lookup()
     cache = FanoutCache('title_cache', shards=24)
     matcher = layered_matcher([
         exact_matcher(lookup),
@@ -43,12 +47,17 @@ def indeed_test_data(texts, lim, soc_n):
     matches = matcher(indeed.reset_index()).set_index('index')
     return matches.content, get_soc_n(matches.code, soc_n), matches.index
 
-def dot_train_data(soc_n):
+def dot_train_data(soc_n, include_tasks=True):
     """Combine DOT Dictionary and Tasks descriptions for training set"""
     dot_dict = get_dictionary('', soc_n)
     tasks = pd.read_csv('tasks.txt', sep='\t')
     processor = Preprocessor(readme_processor, 1, 1, 6).process
-    X_train = pd.concat([dot_dict.job_description, tasks.Task]).map(processor)
 
-    y_train = pd.concat([dot_dict.soc, get_soc_n(tasks['O*NET-SOC Code'], soc_n)])
+    if include_tasks:
+        X_train = pd.concat([dot_dict.job_description, tasks.Task]).map(processor)
+        y_train = pd.concat([dot_dict.soc, get_soc_n(tasks['O*NET-SOC Code'], soc_n)])
+    else:
+        X_train = dot_dict.job_description.map(processor)
+        y_train = dot_dict.soc
+
     return X_train, y_train
