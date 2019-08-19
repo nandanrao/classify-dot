@@ -59,14 +59,32 @@ class Embedding():
         vals = embedding.iloc[:,1:].values
         self.lookup = {k:v for k,v in zip(keys, vals)}
 
-    def embed_doc(self, doc):
+    def embed_paragraph(self, doc):
+        sents = doc.split('\t')
+        vecs = [self.embed_sent(sent) for sent in sents]
+        vecs = [v for v in vecs if v is not None] # check if sentence is empty
+        return np.array(vecs)            
+
+    def embed_sent(self, sent):
+        vec = self.embed_doc(sent)
+        if len(vec):
+            return vec.sum(0) / np.linalg.norm(vec)
+        else:
+            return None
+
+    def embed_doc(self, doc, return_words = False):
+        words = []
         vecs = []
         for word in doc.split():
             try:
                 vecs.append(self.lookup[word])
+                words.append(word)
             except KeyError:
                 pass
-        return np.array(vecs)        
+        if not return_words: 
+            return np.array(vecs)
+        return np.array(vecs), words
+
 
 class WordEmbeddingVectorizer(PreEmbeddedVectorizer):
     def __init__(self, vec_path, cache_dir, sep=' ', chunk_size=1000):

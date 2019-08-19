@@ -3,6 +3,12 @@ from validation.title_matching import layered_matcher, title_matcher, punct_look
 from validation.dot_data import get_dictionary, LemmaTokenizer
 from embed_software.preprocess import Preprocessor, readme_processor
 from diskcache import FanoutCache
+from itertools import islice
+from embed_software.preprocess import claims_processor, readme_processor, Preprocessor
+import json
+from toolz import dissoc
+
+
 
 def get_indeed_texts(path, **kwargs):
     """Reads csv with indeed data that turns into test set"""
@@ -13,6 +19,21 @@ def get_indeed_texts(path, **kwargs):
 def get_soc_n(socs, N):
     return socs.str.split('-').map(lambda l: ''.join(l)[:N]).astype(int)
 
+def make_desc_lookup(path, N):
+    desc_lookup = {
+        2: 'desc_soc2',
+        3: 'desc_soc3',
+        6: 'soc_title6'
+    }
+
+    dot_codes = get_dictionary(path, N).groupby('soc').first()
+    d = dot_codes[desc_lookup[N]].to_dict()
+    def lookup(code):
+        try:
+            return d[int(code)]
+        except KeyError:
+            return code
+    return lookup
 
 def get_title_lookup(path='crosswalks'):
     """Returns function that matches titles to SOC code"""
@@ -47,17 +68,39 @@ def indeed_test_data(texts, lim, soc_n):
     matches = matcher(indeed.reset_index()).set_index('index')
     return matches.content, get_soc_n(matches.code, soc_n), matches.index
 
-def dot_train_data(soc_n, include_tasks=True):
+def dot_train_data(soc_n, include_tasks=True, include_dot=True):
     """Combine DOT Dictionary and Tasks descriptions for training set"""
     dot_dict = get_dictionary('', soc_n)
     tasks = pd.read_csv('tasks.txt', sep='\t')
     processor = Preprocessor(readme_processor, 1, 1, 6).process
 
-    if include_tasks:
+    if include_tasks and include_dot:
         X_train = pd.concat([dot_dict.job_description, tasks.Task]).map(processor)
         y_train = pd.concat([dot_dict.soc, get_soc_n(tasks['O*NET-SOC Code'], soc_n)])
-    else:
+    elif include_dot:
         X_train = dot_dict.job_description.map(processor)
         y_train = dot_dict.soc
+    elif include_tasks:
+        X_train = tasks.Task.map(processor)
+        y_train = get_soc_n(tasks['O*NET-SOC Code'], soc_n)
 
     return X_train, y_train
+
+
+def virginia_data(path):
+    with open(path) as f:
+        dat = (json.loads(l) for l in f)
+        dat = (dissoc(d, '@context', '@type', 'jobLocation', 'baseSalary', '_id') for d in dat)
+        dat = list(dat)
+    return dat
+
+def virginia_test_data(path, N):
+    string_processor = Preprocessor(readme_processor, 4).process
+    dat = virginia_data(path)
+    df = pd.DataFrame(dat)
+    descriptions = df.description.map(string_processor)
+    codes = df.onet_soc_code
+    idx = (codes != '') & (descriptions.notna())
+    df = df[idx]
+    codes = get_soc_n(codes[idx], N)
+    return descriptions[idx], codes, df
