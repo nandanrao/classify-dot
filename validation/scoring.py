@@ -135,10 +135,10 @@ def single_tabular(s, title, score):
     rows = rows[2:]
     rows = rows[:-2]
     pre = ['\\begin{subtable}[t]{\linewidth}',
+            '\caption{{ {} }}'.format(title),
            '\\begin{tabular*}{\\textwidth}{l @{\\extracolsep{\\fill}} c c c}']
 
     post = ['\\end{tabular*}', 
-            '\caption{{ {} }}'.format(title),
             '\end{subtable}',
             '\\vspace{5mm}']
     rows = pre + rows + post
@@ -167,18 +167,19 @@ def truncate(lim, s):
         return s[0:lim-2] + chr(8230)
     return s
 
-def format_scores(s, code_lookup, count_lookup, test_count):
+def format_scores(s, code_lookup, count_lookup, test_count, score):
     dots = [str(count_lookup[code_lookup[c]]) for c in s.index ]
     tests = [str(test_count[c]) for c in s.index ]
+    occ_key = 'Classified Occupation' if score == 'recall' else 'True Occupation'
     
-    return pd.DataFrame({'Occupation': s.index.map(truncate(30)), 
-                         'Percentage': s.values, 
-                         'DOT/Test': [f'{d}/{t}' for d,t in zip(dots, tests)],
-                         'SOC': [str(code_lookup[c]) for c in s.index ]}).reset_index(drop=True)
+    return pd.DataFrame({
+        occ_key: s.index.map(truncate(30)), 
+        'SOC': [str(code_lookup[c]) for c in s.index ],
+        'Proportion': s.values, 
+        'DOT/Test': [f'{d}/{t}' for d,t in zip(dots, tests)]
+    }).reset_index(drop=True)
 
 def format_dfs(score, sdf, df, idx, code_lookup, count_lookup, test_count):
-
-
 
     low = sdf[idx].sort_values(score).index
     df.index = df.columns
@@ -198,9 +199,10 @@ def format_dfs(score, sdf, df, idx, code_lookup, count_lookup, test_count):
     x = [(t,get_score(df,t,sdf,score),get_percentage(df,score,t,s)) 
          for t,s in x]
 
-    format_title = lambda t: f'{code_lookup[t]} - ({count_lookup[code_lookup[t]]}/{test_count[t]}) - {truncate(50, t)}'    
+    format_title = lambda t: f'{truncate(50, t)} (SOC {code_lookup[t]}) ({count_lookup[code_lookup[t]]}/{test_count[t]})'    
 
-    x = [(format_title(t),score,format_scores(s, code_lookup, count_lookup, test_count)) for t,score,s in x]
+    x = [(format_title(t), val, format_scores(s, code_lookup, count_lookup, test_count, score)) 
+         for t,val,s in x]
 
     return x
 
