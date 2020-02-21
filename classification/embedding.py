@@ -6,33 +6,44 @@ import numpy as np
 import pandas as pd
 from math import ceil
 from collections import deque
+import xxhash
 
 class PreEmbeddedVectorizer(BaseEstimator, TransformerMixin):
-    def __init__(self, model, cache_dir, chunk_size=1000):
+    def __init__(self, model, cache_dir, chunk_size=1000, max_workers=None):
         self.model = model
         self.chunk_size = chunk_size
         self.cache_dir = cache_dir
         self.cache = FanoutCache(cache_dir, shards=24, size_limit=2**32) # 4GB cache
-
+        self.max_workers = max_workers
+ 
     def fit(self, X, y=None):
         return self
 
     def _embed_docs(self, docs):
         return embed_docs(self.model, '\n'.join(docs))
 
-    def embed_docs(self, docs):
+    def cached_embed_docs(self, docs):
         cache = self.cache
-        cached = [cache.get(doc) for doc in docs]
+        cached = [cache.get(xxhash.xxh64(doc).hexdigest()) for doc in docs]
         to_embed = [doc for doc,c in zip(docs, cached) if c is None]
+
         if to_embed:
             embedded = deque(self._embed_docs(to_embed))
         else:
             embedded = []
 
         for doc,e in zip(to_embed, embedded):
-            cache.set(doc, e)
+            xid = xxhash.xxh64(doc).hexdigest()
+            cache.set(xid, e)
 
         return np.array([c if c is not None else embedded.popleft() for c in cached])
+
+    def embed_docs(self, docs):
+        if self.cache_dir:
+            return self.cached_embed_docs(docs)
+
+        return self._embed_docs(docs)
+
 
     def transform(self, X):
         # rase Attribute error....
@@ -42,10 +53,10 @@ class PreEmbeddedVectorizer(BaseEstimator, TransformerMixin):
         if type(X) == list:
             X = np.array(X)
 
-        if len(X) < 200:
+        if len(X) < 200 or self.max_workers == 1:
             return self.embed_docs(X)
 
-        with ProcessPoolExecutor() as pool:
+        with ProcessPoolExecutor(self.max_workers) as pool:
             chunks = ceil(X.shape[0] / self.chunk_size)
             chunked = np.array_split(X, chunks)
             embeds = pool.map(self.embed_docs, chunked)
@@ -58,6 +69,8 @@ class Embedding():
         keys = embedding.iloc[:,0]
         vals = embedding.iloc[:,1:].values
         self.lookup = {k:v for k,v in zip(keys, vals)}
+        self.size = vals.shape[1]
+        self.default = np.array([np.zeros(self.size)])
 
     def embed_paragraph(self, doc):
         sents = doc.split('\t')
@@ -81,24 +94,34 @@ class Embedding():
                 words.append(word)
             except KeyError:
                 pass
+        vecs = np.array(vecs) if len(vecs) > 0 else self.default
         if not return_words: 
-            return np.array(vecs)
-        return np.array(vecs), words
+            return vecs 
+        return vecs, words
 
+from numba import njit
+
+@njit
+def normalize(e):
+        e = e.sum(0)
+        norm = np.linalg.norm(e)
+        if norm > 0.0000001:
+            e = e / norm
+        return e
 
 class WordEmbeddingVectorizer(PreEmbeddedVectorizer):
-    def __init__(self, vec_path, cache_dir, sep=' ', chunk_size=1000):
+    def __init__(self, vec_path, cache_dir, sep=' ', chunk_size=1000, max_workers = None):
         self.embedding = Embedding(vec_path, sep=sep)
         self.chunk_size = chunk_size
         self.vec_path = vec_path
-        self.cache_dir = cache_dir
         self.sep = sep
         self.cache = FanoutCache(cache_dir, shards=24, size_limit=2**32)
+        self.cache_dir = cache_dir
+        self.max_workers = max_workers
 
     def embed_doc(self, doc):
         e = self.embedding.embed_doc(doc)
-        e = e.sum(0) / np.linalg.norm(e)
-        return e
+        return normalize(e)
     
     def _embed_docs(self, docs):
         return np.array([self.embed_doc(doc) for doc in docs])
