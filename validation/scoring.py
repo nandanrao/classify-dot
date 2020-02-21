@@ -43,8 +43,8 @@ def get_soc_n_preds(df, n):
             .sum().T
             .idxmax(1))
 
-def get_top_soc_n_preds(df, soc_n, N):
-    dd = (df.T
+def bubser(df, soc_n):
+    return (df.T
           .reset_index()
           .pipe(lambda df: df.assign(soc = df['index'].map(lambda i: str(i)[0:soc_n])))
           .set_index('soc')
@@ -52,11 +52,19 @@ def get_top_soc_n_preds(df, soc_n, N):
           .groupby('soc')
           .sum().T)
 
+def get_out(dd, idx):
+    out = np.zeros((dd.shape[0], idx.shape[1]))
+    for i in np.arange(dd.shape[0]):
+        out[i,:] = dd[i, idx[i]]
+    return out
+
+def get_top_soc_n_preds(df, soc_n, N, probs = False):
+    dd = bubser(df, soc_n)
     idx = np.argsort(-dd.values, axis=1)[:,:N]
     predictions = dd.columns.values[idx]
     
-    # TODO: Add probs
-    # dd.values[idx]
+    if probs: 
+        return predictions, get_out(dd.values, idx)
     return predictions
 
 def counts(arr, i):
@@ -149,7 +157,7 @@ def make_code_lookup(SOC_LEVEL):
     di = (dot_dict[[f'desc_soc{SOC_LEVEL}', 'soc']]
           .groupby('soc')
           .head(1)
-          .set_index('desc_soc3')
+          .set_index(f'desc_soc{SOC_LEVEL}')
           .to_dict(orient='index'))
     return {k:v['soc'] for k,v in di.items()}
 
